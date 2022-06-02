@@ -1,0 +1,49 @@
+# Download data
+
+gbm <- getFirehoseData(dataset="GBM", runDate="20160128",
+                           #forceDownload=TRUE,
+                           #RNASeq2Gene=TRUE,
+                           clinical=TRUE, RNASeq2GeneNorm = TRUE, Mutation = T)
+
+# Data
+
+xdata.raw <- as.data.frame(MUT_DATA) 
+
+ydata.raw <- as.data.frame(SURV_DATA)
+
+ydata <- ydata.raw[rownames(ydata.raw) %in% 
+                     rownames(xdata.raw),]
+
+xdata.raw <- xdata.raw[rownames(xdata.raw) %in% 
+                         rownames(ydata),]
+
+xdata <- xdata.raw %>% 
+  { (apply(., 2, sd) != 0) } %>% 
+  { xdata.raw[, .] } %>% 
+  scale
+
+xdata <- xdata[rownames(ydata),]
+
+xdata <- as.matrix(xdata) 
+
+# Survival
+
+fit.cv <- cv.glmnet(as.matrix(xdata),as.matrix(ydata), 
+                    family = 'cox', 
+                    alpha = 0.3, #controls sparsity
+                    nlambda = 100,
+                    nfolds= 10)
+
+fit <- glmnet(as.matrix(xdata),as.matrix(ydata), 
+              family = 'cox', 
+              alpha = 0.3,
+              lambda = fit.cv$lambda.min)
+
+coefs.fit <- coef(fit, s = 'lambda.min')[,1] %>% { .[. != 0]}
+coefs.fit
+
+curve.fit <-separate2GroupsCox(as.vector(coefs.fit), 
+                               xdata[, names(coefs.fit)], 
+                               ydata, 
+                               legend.outside = FALSE)
+curve.fit$pvalue
